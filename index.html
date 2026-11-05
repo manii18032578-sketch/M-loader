@@ -1,0 +1,258 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="manifest.json">
+<title>M LOADER</title>
+
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#080808;color:white;font-family:Arial,sans-serif}
+header{text-align:center;padding:25px;background:#111;border-bottom:1px solid #333}
+h1{letter-spacing:5px;margin:5px}
+.subtitle{color:#aaa;font-size:12px}
+.container{max-width:480px;margin:25px auto;padding:15px}
+.card{background:#151515;border:1px solid #333;border-radius:14px;padding:20px;margin-bottom:18px}
+h2{text-align:center}
+input,select{width:100%;padding:14px;margin:9px 0;background:#080808;color:white;border:1px solid #444;border-radius:8px}
+button{padding:13px;border:0;border-radius:8px;background:white;color:black;font-weight:bold;cursor:pointer;margin:5px 0}
+.primary{width:100%}
+.secondary{background:#333;color:white}
+.danger{background:#a00000;color:white}
+.hidden{display:none!important}
+.key{background:#222;padding:12px;border-radius:8px;margin:10px 0;overflow-wrap:anywhere}
+.small{font-size:12px;color:#aaa}
+.status{color:#55dd88;font-size:12px}
+.item{border-bottom:1px solid #333;padding:12px 0}
+</style>
+</head>
+
+<body>
+<header>
+<h1>M LOADER</h1>
+<div class="subtitle">PREMIUM ACCESS PANEL</div>
+</header>
+
+<div class="container">
+
+<div id="home" class="card">
+<h2>WELCOME</h2>
+<button class="primary" onclick="showPage('adminLogin')">ADMIN LOGIN</button>
+<button class="primary secondary" onclick="showPage('userLogin')">USER LOGIN</button>
+</div>
+
+<div id="adminLogin" class="card hidden">
+<h2>ADMIN LOGIN</h2>
+<input id="adminPass" type="password" placeholder="Admin Password">
+<button class="primary" onclick="checkAdmin()">LOGIN</button>
+<button class="primary secondary" onclick="showPage('home')">BACK</button>
+</div>
+
+<div id="userLogin" class="card hidden">
+<h2>USER LOGIN</h2>
+<input id="accessKey" placeholder="Enter Access Key">
+<button class="primary" onclick="checkUser()">LOGIN</button>
+<button class="primary secondary" onclick="showPage('home')">BACK</button>
+<p id="message" class="small"></p>
+</div>
+
+<div id="dashboard" class="hidden">
+
+<div class="card">
+<h2>ADMIN DASHBOARD</h2>
+<p class="small">GENERATE ACCESS KEY</p>
+<select id="duration">
+<option value="5">5 HOURS</option>
+<option value="12">12 HOURS</option>
+<option value="24">24 HOURS</option>
+<option value="168">7 DAYS</option>
+<option value="720">1 MONTH</option>
+</select>
+<button class="primary" onclick="generateKey()">GENERATE KEY</button>
+<div id="generated"></div>
+</div>
+
+<div class="card">
+<h2>KEY MANAGEMENT</h2>
+<div id="keyList"></div>
+</div>
+
+<div class="card">
+<h2>LOGIN HISTORY</h2>
+<div id="history"></div>
+<button class="primary danger" onclick="clearHistory()">CLEAR HISTORY</button>
+</div>
+
+<button class="primary secondary" onclick="logout()">LOGOUT</button>
+</div>
+
+<div id="userPanel" class="card hidden">
+<h2>ACCESS GRANTED</h2>
+<p class="status">YOUR ACCESS KEY IS VALID</p>
+<p id="expiryText"></p>
+<button class="primary secondary" onclick="logout()">LOGOUT</button>
+</div>
+
+</div>
+
+<script>
+const ADMIN_PASSWORD="MKADMIN";
+const KEY_STORAGE="mloader_offline_keys";
+const HISTORY_STORAGE="mloader_offline_history";
+
+function showPage(page){
+const pages=["home","adminLogin","userLogin","dashboard","userPanel"];
+pages.forEach(function(id){
+document.getElementById(id).classList.add("hidden");
+});
+document.getElementById(page).classList.remove("hidden");
+}
+
+function getKeys(){
+return JSON.parse(localStorage.getItem(KEY_STORAGE)||"[]");
+}
+
+function saveKeys(keys){
+localStorage.setItem(KEY_STORAGE,JSON.stringify(keys));
+}
+
+function getHistory(){
+return JSON.parse(localStorage.getItem(HISTORY_STORAGE)||"[]");
+}
+
+function saveHistory(data){
+localStorage.setItem(HISTORY_STORAGE,JSON.stringify(data));
+}
+
+function checkAdmin(){
+const password=document.getElementById("adminPass").value;
+if(password===ADMIN_PASSWORD){
+showPage("dashboard");
+renderKeys();
+renderHistory();
+}else{
+alert("WRONG ADMIN PASSWORD");
+}
+}
+
+function generateKey(){
+const chars="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+let key="ML-";
+for(let i=0;i<12;i++){
+key+=chars[Math.floor(Math.random()*chars.length)];
+}
+const hours=Number(document.getElementById("duration").value);
+const expiry=Date.now()+hours*3600000;
+
+const keys=getKeys();
+keys.push({key:key,expiry:expiry,device:null});
+saveKeys(keys);
+
+document.getElementById("generated").innerHTML=
+'<div class="key"><b>'+key+'</b><br><button onclick="copyKey(\''+key+'\')">COPY KEY</button></div>';
+
+renderKeys();
+}
+
+function copyKey(key){
+if(navigator.clipboard && window.isSecureContext){
+navigator.clipboard.writeText(key).then(function(){
+alert("KEY COPIED");
+}).catch(function(){
+prompt("Copy your key:",key);
+});
+}else{
+prompt("Copy your key:",key);
+}
+}
+
+function deleteKey(key){
+if(!confirm("DELETE THIS KEY?"))return;
+const keys=getKeys().filter(function(k){return k.key!==key;});
+saveKeys(keys);
+renderKeys();
+}
+
+function renderKeys(){
+const keys=getKeys();
+let html="";
+keys.forEach(function(k){
+const expired=Date.now()>k.expiry;
+html+='<div class="item"><b>'+k.key+'</b><br>';
+html+='<span class="'+(expired?'small':'status')+'">'+(expired?'EXPIRED':'ACTIVE')+'</span><br>';
+html+='<span class="small">Expiry: '+new Date(k.expiry).toLocaleString()+'</span><br>';
+html+='<button onclick="copyKey(\''+k.key+'\')">COPY</button>';
+html+='<button class="danger" onclick="deleteKey(\''+k.key+'\')">DELETE</button></div>';
+});
+document.getElementById("keyList").innerHTML=html||"NO KEYS GENERATED";
+}
+
+function checkUser(){
+const entered=document.getElementById("accessKey").value.trim().toUpperCase();
+const keys=getKeys();
+const found=keys.find(function(k){return k.key===entered;});
+
+if(!found){
+document.getElementById("message").innerText="INVALID ACCESS KEY";
+return;
+}
+
+if(Date.now()>found.expiry){
+document.getElementById("message").innerText="ACCESS KEY EXPIRED";
+return;
+}
+
+const device=navigator.userAgent;
+if(found.device && found.device!==device){
+document.getElementById("message").innerText="KEY REGISTERED ON ANOTHER BROWSER";
+return;
+}
+
+if(!found.device){
+found.device=device;
+saveKeys(keys);
+}
+
+const history=getHistory();
+history.unshift({
+key:entered,
+time:new Date().toLocaleString(),
+device:device
+});
+saveHistory(history);
+
+document.getElementById("expiryText").innerText=
+"EXPIRES: "+new Date(found.expiry).toLocaleString();
+
+showPage("userPanel");
+}
+
+function renderHistory(){
+const data=getHistory();
+let html="";
+data.forEach(function(h){
+html+='<div class="item"><b>'+h.key+'</b><br>';
+html+='<span class="small">'+h.time+'</span><br>';
+html+='<span class="small">'+h.device+'</span></div>';
+});
+document.getElementById("history").innerHTML=html||"NO LOGIN HISTORY";
+}
+
+function clearHistory(){
+if(confirm("CLEAR ALL HISTORY?")){
+saveHistory([]);
+renderHistory();
+}
+}
+
+function logout(){
+document.getElementById("adminPass").value="";
+document.getElementById("accessKey").value="";
+showPage("home");
+}
+</script>
+</body>
+</html>
