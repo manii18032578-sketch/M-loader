@@ -1,0 +1,183 @@
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>M LOADER</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#090909;color:white;font-family:Arial;padding:18px}
+main{max-width:480px;margin:auto}
+h1{text-align:center;color:#d8ad50;letter-spacing:4px}
+h2{font-size:18px;color:#d8ad50}
+.card{background:#171717;border:1px solid #59451f;border-radius:12px;padding:16px;margin:15px 0}
+input,select{width:100%;padding:13px;margin:8px 0;background:#080808;color:white;border:1px solid #755b2a;border-radius:7px}
+button{padding:11px;background:#d0a447;color:#111;border:0;border-radius:7px;font-weight:bold;margin:5px 2px}
+.red{background:#9c3030;color:white}
+.gray{background:#333;color:white}
+.hidden{display:none}
+.small{font-size:12px;color:#aaa;word-break:break-all}
+.key{color:#e5bd65;word-break:break-all}
+.item{border-bottom:1px solid #444;padding:10px 0}
+</style>
+</head>
+<body>
+<main>
+<h1>M LOADER</h1>
+<p style="text-align:center;color:#aaa">OFFLINE ACCESS PANEL</p>
+
+<section class="card" id="home">
+<h2>SELECT LOGIN</h2>
+<button onclick="show('adminLogin')">ADMIN LOGIN</button>
+<button onclick="show('userLogin')">USER LOGIN</button>
+</section>
+
+<section class="card hidden" id="adminLogin">
+<h2>ADMIN LOGIN</h2>
+<input id="adminPassword" type="password" placeholder="Admin Password">
+<button onclick="adminEnter()">LOGIN</button>
+<button class="gray" onclick="show('home')">BACK</button>
+<p class="small">Demo password: MKADMIN</p>
+</section>
+
+<section class="card hidden" id="userLogin">
+<h2>USER LOGIN</h2>
+<input id="accessKey" placeholder="Enter Access Key">
+<button onclick="userEnter()">LOGIN</button>
+<button class="gray" onclick="show('home')">BACK</button>
+<p id="loginMessage" class="small"></p>
+</section>
+
+<section id="adminPanel" class="hidden">
+<div class="card">
+<h2>KEY GENERATOR</h2>
+<select id="duration">
+<option value="5">5 Hours</option>
+<option value="12">12 Hours</option>
+<option value="24">24 Hours</option>
+<option value="168">7 Days</option>
+<option value="720">1 Month (30 Days)</option>
+</select>
+<button onclick="generateKey()">GENERATE KEY</button>
+<p id="newKey" class="key"></p>
+</div>
+
+<div class="card">
+<h2>KEY MANAGEMENT</h2>
+<div id="keys"></div>
+</div>
+
+<div class="card">
+<h2>LOGIN HISTORY</h2>
+<div id="history"></div>
+</div>
+<button class="gray" onclick="logout()">LOGOUT</button>
+</section>
+
+<section class="card hidden" id="userPanel">
+<h2>ACCESS GRANTED</h2>
+<p>Welcome to M LOADER.</p>
+<p id="expiry" class="key"></p>
+<button onclick="logout()">LOGOUT</button>
+</section>
+</main>
+
+<script>
+const DB="mloader_offline_keys";
+const LOG="mloader_offline_history";
+
+function read(k){return JSON.parse(localStorage.getItem(k)||"[]")}
+function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
+function show(id){
+["home","adminLogin","userLogin","adminPanel","userPanel"].forEach(x=>
+document.getElementById(x).classList.add("hidden"));
+document.getElementById(id).classList.remove("hidden");
+}
+function date(t){return new Date(t).toLocaleString()}
+function adminEnter(){
+if(document.getElementById("adminPassword").value!=="MKADMIN"){
+alert("Wrong password");return;
+}
+show("adminPanel");renderKeys();renderHistory();
+}
+function generateKey(){
+const hours=Number(document.getElementById("duration").value);
+const key="ML-"+Math.random().toString(36).slice(2,7).toUpperCase()
++"-"+Math.random().toString(36).slice(2,7).toUpperCase();
+const now=Date.now(),data=read(DB);
+data.push({key,hours,created:now,expiry:now+hours*3600000});
+write(DB,data);
+document.getElementById("newKey").textContent=key;
+renderKeys();
+}
+function renderKeys(){
+const box=document.getElementById("keys");
+box.innerHTML="";
+read(DB).forEach((k,i)=>{
+const div=document.createElement("div");
+div.className="item";
+const info=document.createElement("p");
+info.className="small";
+info.textContent=k.key+" | "+k.hours+" Hours | "+(Date.now()<k.expiry?"ACTIVE":"EXPIRED");
+const copy=document.createElement("button");
+copy.textContent="COPY KEY";
+copy.onclick=()=>copyText(k.key);
+const del=document.createElement("button");
+del.textContent="DELETE";
+del.className="red";
+del.onclick=()=>{
+if(confirm("Delete this key?")){
+const d=read(DB);d.splice(i,1);write(DB,d);renderKeys();
+}};
+div.append(info,copy,del);
+box.appendChild(div);
+});
+}
+function copyText(value){
+if(navigator.clipboard&&navigator.clipboard.writeText){
+navigator.clipboard.writeText(value).then(()=>alert("Copied"))
+.catch(()=>prompt("Copy key:",value));
+}else prompt("Copy key:",value);
+}
+function userEnter(){
+const key=document.getElementById("accessKey").value.trim();
+const item=read(DB).find(k=>k.key===key);
+if(!item){document.getElementById("loginMessage").textContent="Invalid Access Key";return}
+if(Date.now()>=item.expiry){
+document.getElementById("loginMessage").textContent="Access Key Expired";return;
+}
+const agent=navigator.userAgent;
+const history=read(LOG);
+history.unshift({key,time:Date.now(),device:agent});
+write(LOG,history.slice(0,100));
+document.getElementById("expiry").textContent="Expires: "+date(item.expiry);
+show("userPanel");
+}
+function renderHistory(){
+const box=document.getElementById("history");
+box.innerHTML="";
+read(LOG).forEach(x=>{
+const p=document.createElement("p");
+p.className="small item";
+p.textContent="Key: "+x.key+" | "+date(x.time)+" | Device: "+x.device;
+box.appendChild(p);
+});
+if(!box.children.length)box.textContent="No login history yet.";
+}
+function logout(){
+document.getElementById("adminPassword").value="";
+document.getElementById("accessKey").value="";
+show("home");
+}
+</script>
+</body>
+</html>
